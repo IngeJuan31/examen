@@ -1,0 +1,10 @@
+RewriteEngine On
+
+# Redirige URLs sin .php si el archivo .php existe
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^([^/]+)$ $1.php [L]
+
+# También reescribe rutas dentro de /admin
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^admin/([^/]+)$ admin/$1.php [L]
