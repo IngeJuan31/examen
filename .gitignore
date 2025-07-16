@@ -1,0 +1,9 @@
+/vendor/
+
+/config/
+composer.json
+composer.lock
+
+.htaccess
+acceso_denegado.php
+
