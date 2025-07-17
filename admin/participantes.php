@@ -1832,7 +1832,7 @@ document.getElementById('formParticipante').addEventListener('submit', function(
     border-radius: 8px;
     box-shadow: var(--sombra-suave);
     border: 1px solid #e9ecef;
-    max-width: 600px;
+    max-width: 880px;
 }
 
 .edit-notice {

@@ -227,7 +227,8 @@ class InformesExamen {
                                 $estudiante[$key] = number_format($porcentaje, 1);
                                 
                                 // ✅ CONTABILIZAR PARA PROMEDIO Y ESTADO
-                                if ($porcentaje >= 0) { // Incluir todos los porcentajes válidos
+                                if ($porcentaje >= 0) // Incluir todos los porcentajes válidos
+                                {
                                     $suma_notas += $porcentaje;
                                     $count_notas++;
                                     $competencias_evaluadas[] = $porcentaje;
@@ -741,6 +742,368 @@ class InformesExamen {
     }
     
     /**
+     * Genera informe de estudiantes sin examen realizado
+     */
+    public function generarInformeEstudiantesSinExamen($filtros = []) {
+        try {
+            $whereClause = "WHERE 1=1";
+            $params = [];
+            
+            // Aplicar filtros
+            if (!empty($filtros['fecha_inicio'])) {
+                $whereClause .= " AND ae.fecha_asignacion >= :fecha_inicio";
+                $params[':fecha_inicio'] = $filtros['fecha_inicio'];
+            }
+            
+            if (!empty($filtros['fecha_fin'])) {
+                $whereClause .= " AND ae.fecha_asignacion <= :fecha_fin";
+                $params[':fecha_fin'] = $filtros['fecha_fin'];
+            }
+            
+            if (!empty($filtros['nivel_examen'])) {
+                $whereClause .= " AND ae.nivel_dificultad = :nivel_examen";
+                $params[':nivel_examen'] = $filtros['nivel_examen'];
+            }
+            
+            if (!empty($filtros['programa'])) {
+                $whereClause .= " AND p.programa = :programa";
+                $params[':programa'] = $filtros['programa'];
+            }
+            
+            $sql = "
+                SELECT 
+                    p.id_participante,
+                    p.identificacion,
+                    p.nombre,
+                    p.correo,
+                    p.programa,
+                    p.semestre,
+                    p.fecha_registro,
+                    ae.nivel_dificultad,
+                    ae.fecha_asignacion,
+                    CASE 
+                        WHEN ae.fecha_asignacion IS NULL THEN 'SIN ASIGNAR'
+                        WHEN NOT EXISTS (
+                            SELECT 1 FROM respuestas r WHERE r.id_participante = p.id_participante
+                        ) THEN 'NO INICIADO'
+                        WHEN EXISTS (
+                            SELECT 1 FROM respuestas r WHERE r.id_participante = p.id_participante
+                        ) AND NOT EXISTS (
+                            SELECT 1 FROM resultados res WHERE res.participante_id = p.id_participante
+                        ) THEN 'INICIADO SIN TERMINAR'
+                        ELSE 'COMPLETADO'
+                    END as estado_examen,
+                    (SELECT COUNT(*) FROM respuestas r WHERE r.id_participante = p.id_participante) as respuestas_parciales,
+                    CASE 
+                        WHEN ae.fecha_asignacion IS NOT NULL THEN 
+                            EXTRACT(DAYS FROM (CURRENT_TIMESTAMP - ae.fecha_asignacion))
+                        ELSE NULL
+                    END as dias_desde_asignacion
+                FROM participantes p
+                LEFT JOIN asignaciones_examen ae ON p.id_participante = ae.id_participante
+                $whereClause
+                AND NOT EXISTS (
+                    SELECT 1 FROM resultados res WHERE res.participante_id = p.id_participante
+                )
+                ORDER BY ae.fecha_asignacion DESC, p.nombre ASC
+            ";
+            
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+        } catch (Exception $e) {
+            throw new Exception("Error al generar informe de estudiantes sin examen: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Obtiene estadísticas de estudiantes sin examen
+     */
+    public function obtenerEstadisticasEstudiantesSinExamen($filtros = []) {
+        try {
+            $whereClause = "WHERE 1=1";
+            $params = [];
+            
+            if (!empty($filtros['fecha_inicio'])) {
+                $whereClause .= " AND ae.fecha_asignacion >= :fecha_inicio";
+                $params[':fecha_inicio'] = $filtros['fecha_inicio'];
+            }
+            
+            if (!empty($filtros['fecha_fin'])) {
+                $whereClause .= " AND ae.fecha_asignacion <= :fecha_fin";
+                $params[':fecha_fin'] = $filtros['fecha_fin'];
+            }
+            
+            if (!empty($filtros['nivel_examen'])) {
+                $whereClause .= " AND ae.nivel_dificultad = :nivel_examen";
+                $params[':nivel_examen'] = $filtros['nivel_examen'];
+            }
+            
+            if (!empty($filtros['programa'])) {
+                $whereClause .= " AND p.programa = :programa";
+                $params[':programa'] = $filtros['programa'];
+            }
+            
+            // Total estudiantes con examen asignado
+            $sqlTotal = "
+                SELECT COUNT(*) as total
+                FROM participantes p
+                INNER JOIN asignaciones_examen ae ON p.id_participante = ae.id_participante
+                $whereClause
+            ";
+            $stmt = $this->pdo->prepare($sqlTotal);
+            $stmt->execute($params);
+            $total_asignados = (int)$stmt->fetchColumn();
+            
+            // Estudiantes sin examen realizado
+            $sqlSinExamen = "
+                SELECT COUNT(*) as total
+                FROM participantes p
+                LEFT JOIN asignaciones_examen ae ON p.id_participante = ae.id_participante
+                $whereClause
+                AND NOT EXISTS (
+                    SELECT 1 FROM resultados res WHERE res.participante_id = p.id_participante
+                )
+            ";
+            $stmt = $this->pdo->prepare($sqlSinExamen);
+            $stmt->execute($params);
+            $sin_examen = (int)$stmt->fetchColumn();
+            
+            // Estudiantes que iniciaron pero no terminaron
+            $sqlIniciados = "
+                SELECT COUNT(*) as total
+                FROM participantes p
+                LEFT JOIN asignaciones_examen ae ON p.id_participante = ae.id_participante
+                $whereClause
+                AND EXISTS (
+                    SELECT 1 FROM respuestas r WHERE r.id_participante = p.id_participante
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM resultados res WHERE res.participante_id = p.id_participante
+                )
+            ";
+            $stmt = $this->pdo->prepare($sqlIniciados);
+            $stmt->execute($params);
+            $iniciados_sin_terminar = (int)$stmt->fetchColumn();
+            
+            // Promedio de días desde asignación
+            $sqlPromedioDias = "
+                SELECT AVG(EXTRACT(DAYS FROM (CURRENT_TIMESTAMP - ae.fecha_asignacion))) as promedio_dias
+                FROM participantes p
+                LEFT JOIN asignaciones_examen ae ON p.id_participante = ae.id_participante
+                $whereClause
+                AND NOT EXISTS (
+                    SELECT 1 FROM resultados res WHERE res.participante_id = p.id_participante
+                )
+                AND ae.fecha_asignacion IS NOT NULL
+            ";
+            $stmt = $this->pdo->prepare($sqlPromedioDias);
+            $stmt->execute($params);
+            $promedio_dias = (float)$stmt->fetchColumn();
+            
+            return [
+                'total_asignados' => $total_asignados,
+                'sin_examen' => $sin_examen,
+                'iniciados_sin_terminar' => $iniciados_sin_terminar,
+                'no_iniciados' => $sin_examen - $iniciados_sin_terminar,
+                'promedio_dias_asignacion' => $promedio_dias,
+                'porcentaje_pendientes' => $total_asignados > 0 ? ($sin_examen / $total_asignados) * 100 : 0
+            ];
+            
+        } catch (Exception $e) {
+            return [
+                'total_asignados' => 0,
+                'sin_examen' => 0,
+                'iniciados_sin_terminar' => 0,
+                'no_iniciados' => 0,
+                'promedio_dias_asignacion' => 0,
+                'porcentaje_pendientes' => 0
+            ];
+        }
+    }
+
+    /**
+     * Genera Excel para estudiantes sin examen
+     */
+    public function generarExcelEstudiantesSinExamen($datos, $estadisticas, $filtros = []) {
+        try {
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            
+            // Configurar propiedades
+            $spreadsheet->getProperties()
+                ->setCreator("Instituto de Administracion y salud INCATEC")
+                ->setTitle("Informe de Estudiantes Sin Examen - INCATEC")
+                ->setSubject("Estudiantes Pendientes de Examen")
+                ->setDescription("Informe de estudiantes que tienen asignado el examen pero no lo han realizado");
+        
+            // Colores
+            $colorAzul = '1E3A8A';
+            $colorRojo = 'E74C3C';
+            $colorNaranja = 'F39C12';
+            $colorGris = '95A5A6';
+            $colorAzulClaro = 'E6F3FF';
+        
+            $fila_actual = 1;
+        
+            // Encabezado principal
+            $sheet->setCellValue('A1', 'INCATEC - ESTUDIANTES SIN EXAMEN REALIZADO');
+            $sheet->mergeCells('A1:K1');
+            $sheet->getStyle('A1')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 16, 'color' => ['argb' => 'FF' . $colorAzul]],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . $colorAzulClaro]]
+            ]);
+        
+            // Fecha
+            $sheet->setCellValue('A2', 'Fecha de Generacion: ' . date('d/m/Y H:i:s'));
+            $sheet->mergeCells('A2:K2');
+            $sheet->getStyle('A2')->applyFromArray([
+                'font' => ['italic' => true],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+            ]);
+        
+            $fila_actual = 4;
+        
+            // Estadísticas
+            if ($estadisticas) {
+                $sheet->setCellValue('A4', 'ESTADISTICAS');
+                $sheet->mergeCells('A4:K4');
+                $sheet->getStyle('A4')->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 12],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . $colorAzulClaro]]
+                ]);
+                
+                $stats = [
+                    'A5' => ['Total Asignados', $estadisticas['total_asignados']],
+                    'C5' => ['Sin Examen', $estadisticas['sin_examen']],
+                    'E5' => ['No Iniciados', $estadisticas['no_iniciados']],
+                    'G5' => ['Iniciados sin Terminar', $estadisticas['iniciados_sin_terminar']],
+                    'I5' => ['% Pendientes', number_format($estadisticas['porcentaje_pendientes'], 1) . '%'],
+                    'K5' => ['Promedio Días', number_format($estadisticas['promedio_dias_asignacion'], 0)]
+                ];
+                
+                foreach ($stats as $celda => $data) {
+                    $sheet->setCellValue($celda, $data[0]);
+                    $sheet->setCellValue(substr($celda, 0, 1) . '6', $data[1]);
+                    $sheet->getStyle($celda)->applyFromArray([
+                        'font' => ['bold' => true, 'size' => 9],
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+                    ]);
+                    $sheet->getStyle(substr($celda, 0, 1) . '6')->applyFromArray([
+                        'font' => ['bold' => true, 'size' => 10],
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+                    ]);
+                }
+                
+                $fila_actual = 8;
+            }
+            
+            // Encabezados de datos
+            $headers = [
+                'DOCUMENTO',
+                'NOMBRE COMPLETO',
+                'CORREO',
+                'PROGRAMA',
+                'SEMESTRE',
+                'FECHA REGISTRO',
+                'NIVEL ASIGNADO',
+                'FECHA ASIGNACION',
+                'DIAS DESDE ASIGNACION',
+                'ESTADO',
+                'RESPUESTAS PARCIALES'
+            ];
+            
+            foreach ($headers as $col_index => $header) {
+                $col_letter = $this->getColumnLetter($col_index + 1);
+                $sheet->setCellValue($col_letter . $fila_actual, $header);
+            }
+            
+            // Estilo de encabezados
+            $header_range = 'A' . $fila_actual . ':K' . $fila_actual;
+            $sheet->getStyle($header_range)->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'wrapText' => true],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . $colorAzul]],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
+            ]);
+            
+            $fila_actual++;
+            
+            // Datos
+            foreach ($datos as $row_index => $estudiante) {
+                $fila_datos = [
+                    $estudiante['identificacion'],
+                    $estudiante['nombre'],
+                    $estudiante['correo'],
+                    $estudiante['programa'] ?? 'N/A',
+                    $estudiante['semestre'] ?? 'N/A',
+                    date('d/m/Y', strtotime($estudiante['fecha_registro'])),
+                    $estudiante['nivel_dificultad'] ? ucfirst($estudiante['nivel_dificultad']) : 'Sin asignar',
+                    $estudiante['fecha_asignacion'] ? date('d/m/Y', strtotime($estudiante['fecha_asignacion'])) : 'N/A',
+                    $estudiante['dias_desde_asignacion'] ?? 'N/A',
+                    $estudiante['estado_examen'],
+                    $estudiante['respuestas_parciales']
+                ];
+                
+                foreach ($fila_datos as $col_index => $valor) {
+                    $col_letter = $this->getColumnLetter($col_index + 1);
+                    $sheet->setCellValue($col_letter . $fila_actual, $valor);
+                }
+                
+                // Colorear según estado
+                $color_fondo = 'FFFFFFFF';
+                if ($estudiante['estado_examen'] === 'NO INICIADO') {
+                    $color_fondo = 'FFFFEAA7'; // Naranja claro
+                } elseif ($estudiante['estado_examen'] === 'INICIADO SIN TERMINAR') {
+                    $color_fondo = 'FFFDCB6E'; // Amarillo
+                } elseif ($estudiante['estado_examen'] === 'SIN ASIGNAR') {
+                    $color_fondo = 'FFFF6B6B'; // Rojo claro
+                }
+                
+                $row_range = 'A' . $fila_actual . ':K' . $fila_actual;
+                $sheet->getStyle($row_range)->applyFromArray([
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $color_fondo]],
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE0E0E0']]]
+                ]);
+                
+                $fila_actual++;
+            }
+            
+            // Ajustar anchos
+            $anchos = ['A' => 15, 'B' => 30, 'C' => 25, 'D' => 25, 'E' => 12, 'F' => 15, 'G' => 15, 'H' => 15, 'I' => 20, 'J' => 20, 'K' => 18];
+            foreach ($anchos as $col => $ancho) {
+                $sheet->getColumnDimension($col)->setWidth($ancho);
+            }
+            
+            // Configuración final
+            $sheet->setTitle('Estudiantes Sin Examen');
+            $sheet->getPageSetup()->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
+            
+            // Headers y descarga
+            $fecha_hora = date('Y-m-d_H-i-s');
+            $filename = "Estudiantes_Sin_Examen_INCATEC_{$fecha_hora}.xlsx";
+            
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: max-age=0');
+            
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit();
+            
+        } catch (Exception $e) {
+            throw new Exception("Error al generar Excel: " . $e->getMessage());
+        }
+    }
+    
+    /**
      * ✅ FUNCIÓN AUXILIAR CORREGIDA
      */
     private function getColumnLetter($columnNumber) {
@@ -814,6 +1177,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
             } catch (Exception $e) {
                 $error_vista = $e->getMessage();
+            }
+            break;
+        
+        case 'generar_excel_sin_examen':
+            try {
+                $filtros = array_filter([
+                    'fecha_inicio' => $_POST['fecha_inicio'] ?? '',
+                    'fecha_fin' => $_POST['fecha_fin'] ?? '',
+                    'nivel_examen' => $_POST['nivel_examen'] ?? '',
+                    'programa' => $_POST['programa'] ?? ''
+                ]);
+                
+                $datos = $informes->generarInformeEstudiantesSinExamen($filtros);
+                $estadisticas = $informes->obtenerEstadisticasEstudiantesSinExamen($filtros);
+                
+                if (empty($datos)) {
+                    throw new Exception("No se encontraron estudiantes sin examen para los filtros especificados.");
+                }
+                
+                while (ob_get_level()) {
+                    ob_end_clean();
+                }
+                
+                $informes->generarExcelEstudiantesSinExamen($datos, $estadisticas, $filtros);
+                
+            } catch (Exception $e) {
+                $error = "Error al generar Excel: " . $e->getMessage();
+                error_log($error);
             }
             break;
     }
@@ -1236,7 +1627,6 @@ try {
             border-left: 4px solid;
             display: flex;
             align-items: center;
-            gap: 0.75rem;
         }
 
         .alert-danger-professional {
@@ -1625,6 +2015,231 @@ try {
                 </div>
             </div>
         <?php endif; ?>
+
+        <!-- Nueva sección para estudiantes sin examen -->
+        <div class="content-section">
+            <div class="card-professional">
+                <div class="card-header-professional">
+                    <h3 class="card-title">
+                        <i class="fas fa-user-clock"></i>
+                        Informe de Estudiantes Sin Examen
+                    </h3>
+                </div>
+                <div class="card-body-professional">
+                    <div class="info-banner" style="background: linear-gradient(135deg, #fff3e0, #ffcc80); border-color: #f57c00;">
+                        <h4 style="color: #e65100;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Estudiantes Pendientes de Examen
+                        </h4>
+                        <p style="color: #ef6c00;"><strong>Incluye:</strong> Estudiantes con examen asignado pero no realizado</p>
+                        <p style="color: #ef6c00;"><strong>Estados:</strong> Sin iniciar, Iniciado sin terminar, Sin asignar</p>
+                        <p class="mb-0" style="color: #ef6c00;">📋 Ideal para seguimiento y recordatorios</p>
+                    </div>
+                    
+                    <form method="POST" id="formInformeSinExamen" class="filter-section">
+                        <div class="filters-grid">
+                            <div class="form-group-professional">
+                                <label class="form-label-professional">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    Fecha Asignación Inicio
+                                </label>
+                                <input type="date" class="form-control-professional" name="fecha_inicio" 
+                                       value="<?php echo $_POST['fecha_inicio'] ?? ''; ?>">
+                            </div>
+                            
+                            <div class="form-group-professional">
+                                <label class="form-label-professional">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    Fecha Asignación Fin
+                                </label>
+                                <input type="date" class="form-control-professional" name="fecha_fin"
+                                       value="<?php echo $_POST['fecha_fin'] ?? ''; ?>">
+                            </div>
+                            
+                            <div class="form-group-professional">
+                                <label class="form-label-professional">
+                                    <i class="fas fa-layer-group"></i>
+                                    Nivel de Examen
+                                </label>
+                                <select class="form-control-professional" name="nivel_examen">
+                                    <option value="">Todos los niveles</option>
+                                    <?php if (isset($niveles)): ?>
+                                        <?php foreach ($niveles as $nivel): ?>
+                                            <option value="<?php echo htmlspecialchars($nivel); ?>"
+                                                    <?php echo (($_POST['nivel_examen'] ?? '') === $nivel) ? 'selected' : ''; ?>>
+                                                <?php echo ucfirst($nivel); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group-professional">
+                                <label class="form-label-professional">
+                                    <i class="fas fa-graduation-cap"></i>
+                                    Programa
+                                </label>
+                                <select class="form-control-professional" name="programa">
+                                    <option value="">Todos los programas</option>
+                                    <?php if (isset($programas)): ?>
+                                        <?php foreach ($programas as $programa): ?>
+                                            <option value="<?php echo htmlspecialchars($programa); ?>"
+                                                    <?php echo (($_POST['programa'] ?? '') === $programa) ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($programa); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="actions-container">
+                            <button type="submit" name="accion" value="vista_previa_sin_examen" class="btn-professional btn-info-professional">
+                                <i class="fas fa-eye"></i>
+                                Vista Previa Sin Examen
+                            </button>
+                            
+                            <button type="submit" name="accion" value="generar_excel_sin_examen" class="btn-professional btn-danger-professional">
+                                <i class="fas fa-download"></i>
+                                Descargar Excel Sin Examen
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estadísticas para estudiantes sin examen -->
+        <?php if (isset($estadisticas_sin_examen)): ?>
+            <div class="content-section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number"><?php echo $estadisticas_sin_examen['total_asignados']; ?></div>
+                        <div class="stat-label">
+                            <i class="fas fa-users"></i>
+                            Total Asignados
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number"><?php echo $estadisticas_sin_examen['sin_examen']; ?></div>
+                        <div class="stat-label">
+                            <i class="fas fa-user-times"></i>
+                            Sin Examen
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number"><?php echo $estadisticas_sin_examen['no_iniciados']; ?></div>
+                        <div class="stat-label">
+                            <i class="fas fa-play-circle"></i>
+                            No Iniciados
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number"><?php echo $estadisticas_sin_examen['iniciados_sin_terminar']; ?></div>
+                        <div class="stat-label">
+                            <i class="fas fa-pause-circle"></i>
+                            Iniciados sin Terminar
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number"><?php echo number_format($estadisticas_sin_examen['porcentaje_pendientes'], 1); ?>%</div>
+                        <div class="stat-label">
+                            <i class="fas fa-percentage"></i>
+                            % Pendientes
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number"><?php echo number_format($estadisticas_sin_examen['promedio_dias_asignacion'], 0); ?></div>
+                        <div class="stat-label">
+                            <i class="fas fa-calendar-day"></i>
+                            Días Promedio
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Tabla de vista previa para estudiantes sin examen -->
+        <?php if (isset($datos_sin_examen) && !empty($datos_sin_examen)): ?>
+            <div class="content-section">
+                <div class="card-professional">
+                    <div class="card-header-professional">
+                        <h3 class="card-title">
+                            <i class="fas fa-table"></i>
+                            Estudiantes Sin Examen Realizado
+                        </h3>
+                    </div>
+                    <div class="card-body-professional">
+                        <div class="table-container">
+                            <table class="table-professional">
+                                <thead>
+                                    <tr>
+                                        <th><i class="fas fa-id-card"></i> Documento</th>
+                                        <th><i class="fas fa-user"></i> Nombre</th>
+                                        <th><i class="fas fa-envelope"></i> Correo</th>
+                                        <th><i class="fas fa-graduation-cap"></i> Programa</th>
+                                        <th><i class="fas fa-layer-group"></i> Nivel</th>
+                                        <th><i class="fas fa-calendar-plus"></i> Fecha Asignación</th>
+                                        <th><i class="fas fa-clock"></i> Días Transcurridos</th>
+                                        <th><i class="fas fa-flag"></i> Estado</th>
+                                        <th><i class="fas fa-edit"></i> Respuestas Parciales</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($datos_sin_examen as $estudiante): ?>
+                                        <tr>
+                                            <td><?php echo htmlspecialchars($estudiante['identificacion']); ?></td>
+                                            <td title="<?php echo htmlspecialchars($estudiante['nombre']); ?>">
+                                                <?php echo htmlspecialchars(strlen($estudiante['nombre']) > 25 ? substr($estudiante['nombre'], 0, 25) . '...' : $estudiante['nombre']); ?>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($estudiante['correo']); ?></td>
+                                            <td><?php echo htmlspecialchars($estudiante['programa'] ?? 'N/A'); ?></td>
+                                            <td><?php echo $estudiante['nivel_dificultad'] ? ucfirst($estudiante['nivel_dificultad']) : 'Sin asignar'; ?></td>
+                                            <td><?php echo $estudiante['fecha_asignacion'] ? date('d/m/Y', strtotime($estudiante['fecha_asignacion'])) : 'N/A'; ?></td>
+                                            <td>
+                                                <?php if ($estudiante['dias_desde_asignacion'] !== null): ?>
+                                                    <span class="badge-professional <?php echo $estudiante['dias_desde_asignacion'] > 7 ? 'badge-danger' : ($estudiante['dias_desde_asignacion'] > 3 ? 'badge-warning' : 'badge-success'); ?>">
+                                                        <?php echo $estudiante['dias_desde_asignacion']; ?> días
+                                                    </span>
+                                                <?php else: ?>
+                                                    N/A
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php 
+                                                $estado_class = '';
+                                                switch($estudiante['estado_examen']) {
+                                                    case 'NO INICIADO':
+                                                        $estado_class = 'badge-warning';
+                                                        break;
+                                                    case 'INICIADO SIN TERMINAR':
+                                                        $estado_class = 'badge-danger';
+                                                        break;
+                                                    case 'SIN ASIGNAR':
+                                                        $estado_class = 'badge-danger';
+                                                        break;
+                                                    default:
+                                                        $estado_class = 'badge-success';
+                                                }
+                                                ?>
+                                                <span class="badge-professional <?php echo $estado_class; ?>">
+                                                    <?php echo htmlspecialchars($estudiante['estado_examen']); ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge-professional <?php echo $estudiante['respuestas_parciales'] > 0 ? 'badge-warning' : 'badge-success'; ?>">
+                                                    <?php echo $estudiante['respuestas_parciales']; ?>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -1808,6 +2423,96 @@ try {
                                 customClass: {
                                     popup: 'swal-success-popup'
                                 }
+                            });
+                        }, 2000);
+                    }
+                });
+            }
+        });
+
+        // Agrega este código después del JavaScript existente
+        document.getElementById('formInformeSinExamen').addEventListener('submit', function(e) {
+            if (e.submitter && e.submitter.value === 'generar_excel_sin_examen') {
+                e.preventDefault();
+                
+                Swal.fire({
+                    title: '👥 Informe de Estudiantes Sin Examen',
+                    html: `
+                        <div style="text-align: center; padding: 20px;">
+                            <div style="background: linear-gradient(135deg, #fff3e0, #ffcc80); 
+                                        border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+                                <i class="fas fa-user-clock" style="font-size: 3rem; color: #f57c00; margin-bottom: 16px;"></i>
+                                <h3 style="color: #e65100; margin-bottom: 12px; font-weight: 600;">
+                                    Estudiantes Pendientes de Examen
+                                </h3>
+                                <p style="color: #ef6c00; margin-bottom: 8px; font-size: 1.1rem;">
+                                    <strong>Incluye:</strong> Estudiantes con examen asignado pero no realizado
+                                </p>
+                                <p style="color: #ef6c00; margin-bottom: 8px;">
+                                    <strong>Estados:</strong> Sin iniciar, Iniciado sin terminar, Sin asignar
+                                </p>
+                                <p style="color: #ef6c00; margin-bottom: 0; font-size: 0.95rem;">
+                                    <strong>Ideal para:</strong> Seguimiento y recordatorios
+                                </p>
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 12px; 
+                                        background: #f8f9fa; padding: 16px; border-radius: 8px; margin-top: 16px;">
+                                <i class="fas fa-info-circle" style="color: #17a2b8; font-size: 1.2rem;"></i>
+                                <span style="color: #495057; font-size: 0.95rem;">
+                                    Se incluyen campos adicionales como días transcurridos
+                                </span>
+                            </div>
+                        </div>
+                    `,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-download"></i> Generar Excel',
+                    cancelButtonText: '<i class="fas fa-times"></i> Cancelar',
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    width: '550px'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Mostrar loading
+                        Swal.fire({
+                            title: '👥 Generando Informe...',
+                            html: `
+                                <div style="text-align: center; padding: 30px;">
+                                    <i class="fas fa-user-clock" style="font-size: 4rem; color: #f57c00; animation: pulse 2s infinite;"></i>
+                                    <h3 style="color: #e65100; margin: 20px 0;">Procesando estudiantes pendientes...</h3>
+                                </div>
+                            `,
+                            showConfirmButton: false,
+                            allowOutsideClick: false
+                        });
+                        
+                        // Enviar formulario
+                        const form = document.getElementById('formInformeSinExamen');
+                        const formData = new FormData(form);
+                        formData.set('accion', 'generar_excel_sin_examen');
+                        
+                        const tempForm = document.createElement('form');
+                        tempForm.method = 'POST';
+                        tempForm.style.display = 'none';
+                        
+                        for (let [key, value] of formData.entries()) {
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = key;
+                            input.value = value;
+                            tempForm.appendChild(input);
+                        }
+                        
+                        document.body.appendChild(tempForm);
+                        tempForm.submit();
+                        
+                        setTimeout(() => {
+                            Swal.close();
+                            Swal.fire({
+                                title: '✅ ¡Descarga Iniciada!',
+                                text: 'El informe de estudiantes sin examen se está descargando',
+                                icon: 'success',
+                                confirmButtonColor: '#28a745'
                             });
                         }, 2000);
                     }
