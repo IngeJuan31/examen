@@ -6,7 +6,7 @@ require_once '../config/db.php';
 $usuarios = $pdo->query("SELECT id_admin, nombre, usuario FROM usuarios_admin ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
 
 // Cargar permisos
-$permisos = $pdo->query("SELECT id_permiso, nombre_permiso FROM permisos ORDER BY nombre_permiso")->fetchAll(PDO::FETCH_ASSOC);
+$permisos = $pdo->query("SELECT id_permiso, nombre_permiso, descripcion FROM permisos ORDER BY nombre_permiso")->fetchAll(PDO::FETCH_ASSOC);
 
 // Función para obtener permisos actuales de un usuario
 function obtenerPermisosUsuario($pdo, $id_admin) {
@@ -601,7 +601,7 @@ fetch('/examen_ingreso/controllers/recargar_permisos.php')
                                     <div class="permiso-info">
                                         <div class="permiso-name"><?= htmlspecialchars($p['nombre_permiso']) ?></div>
                                         <div class="permiso-description">
-                                            <?= ucfirst(str_replace('_', ' ', $p['nombre_permiso'])) ?>
+                                            <?= htmlspecialchars($p['descripcion']) ?: 'Sin descripción disponible' ?>
                                         </div>
                                     </div>
                                 </label>
