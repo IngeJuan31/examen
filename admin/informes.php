@@ -16,10 +16,12 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Style\Color;
 
-class InformesExamen {
+class InformesExamen
+{
     private $pdo;
-    
-    public function __construct($pdo) {
+
+    public function __construct($pdo)
+    {
         $this->pdo = $pdo;
     }
 
@@ -30,11 +32,12 @@ class InformesExamen {
     /**
      * Genera informe simple de estudiantes por competencia (para vista previa)
      */
-    public function generarInformeSimple($filtros = []) {
+    public function generarInformeSimple($filtros = [])
+    {
         try {
             $whereClause = "WHERE 1=1";
             $params = [];
-            
+
             if (!empty($filtros['fecha_inicio'])) {
                 $whereClause .= " AND he.fecha_realizacion >= :fecha_inicio";
                 $params[':fecha_inicio'] = $filtros['fecha_inicio'];
@@ -80,41 +83,42 @@ class InformesExamen {
             throw new Exception("Error al generar informe simple: " . $e->getMessage());
         }
     }
-    
+
     /**
      * Genera informe estructurado de estudiantes con notas por competencia (LÓGICA CORREGIDA)
      */
-    public function generarInformeEstudiantesEstructurado($filtros = []) {
+    public function generarInformeEstudiantesEstructurado($filtros = [])
+    {
         try {
             $whereClause = "WHERE 1=1";
             $params = [];
-            
+
             // Aplicar filtros
             if (!empty($filtros['fecha_inicio'])) {
                 $whereClause .= " AND he.fecha_realizacion >= :fecha_inicio";
                 $params[':fecha_inicio'] = $filtros['fecha_inicio'];
             }
-            
+
             if (!empty($filtros['fecha_fin'])) {
                 $whereClause .= " AND he.fecha_realizacion <= :fecha_fin";
                 $params[':fecha_fin'] = $filtros['fecha_fin'];
             }
-            
+
             if (!empty($filtros['nivel_examen'])) {
                 $whereClause .= " AND ae.nivel_dificultad = :nivel_examen";
                 $params[':nivel_examen'] = $filtros['nivel_examen'];
             }
-            
+
             if (!empty($filtros['programa'])) {
                 $whereClause .= " AND p.programa = :programa";
                 $params[':programa'] = $filtros['programa'];
             }
-            
+
             if (!empty($filtros['estado'])) {
                 $whereClause .= " AND he.estado = :estado";
                 $params[':estado'] = $filtros['estado'];
             }
-            
+
             // ✅ CONSULTA COMPLETAMENTE CORREGIDA
             $sql = "
                 WITH mejores_competencias AS (
@@ -180,17 +184,17 @@ class InformesExamen {
                          de.nivel_asignado, de.intento_numero
                 ORDER BY de.nombre
             ";
-            
+
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute($params);
             $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
             // Obtener todas las competencias únicas
             $competencias = $this->obtenerCompetenciasUnicas($filtros);
-            
+
             // Estructurar datos CON LÓGICA ESTRICTA
             $datos_estructurados = [];
-            
+
             foreach ($resultados as $fila) {
                 $estudiante = [
                     'id_participante' => $fila['id_participante'],
@@ -202,18 +206,18 @@ class InformesExamen {
                     'nivel_examen' => ucfirst($fila['nivel_asignado']),
                     'intento' => $fila['intento_numero']
                 ];
-                
+
                 // Inicializar todas las competencias con 0
                 foreach ($competencias as $competencia) {
                     $estudiante['comp_' . $this->limpiarNombreCompetencia($competencia)] = '0.0';
                 }
-                
+
                 // ✅ PROCESAR COMPETENCIAS REALES
                 $suma_notas = 0;
                 $count_notas = 0;
                 $tiene_competencia_reprobada = false;
                 $competencias_evaluadas = [];
-                
+
                 if (!empty($fila['competencias_notas'])) {
                     $notas = explode('|', $fila['competencias_notas']);
                     foreach ($notas as $nota) {
@@ -222,17 +226,17 @@ class InformesExamen {
                             if (count($partes) >= 2) {
                                 $nombre_comp = trim($partes[0]);
                                 $porcentaje = (float)$partes[1];
-                                
+
                                 $key = 'comp_' . $this->limpiarNombreCompetencia($nombre_comp);
                                 $estudiante[$key] = number_format($porcentaje, 1);
-                                
+
                                 // ✅ CONTABILIZAR PARA PROMEDIO Y ESTADO
                                 if ($porcentaje >= 0) // Incluir todos los porcentajes válidos
                                 {
                                     $suma_notas += $porcentaje;
                                     $count_notas++;
                                     $competencias_evaluadas[] = $porcentaje;
-                                    
+
                                     // ✅ VERIFICAR SI TIENE ALGUNA COMPETENCIA REPROBADA
                                     if ($porcentaje < 70) {
                                         $tiene_competencia_reprobada = true;
@@ -242,11 +246,11 @@ class InformesExamen {
                         }
                     }
                 }
-                
+
                 // ✅ CALCULAR PROMEDIO FINAL
                 $promedio_final = $count_notas > 0 ? ($suma_notas / $count_notas) : 0;
                 $estudiante['promedio_final'] = number_format($promedio_final, 1);
-                
+
                 // Si UNA sola competencia < 70 = REPROBADO automáticamente
                 if ($tiene_competencia_reprobada) {
                     $estudiante['resultado'] = 'REPROBADO';
@@ -257,33 +261,33 @@ class InformesExamen {
                     $estudiante['resultado'] = 'REPROBADO';
                     $estudiante['estado'] = 'REPROBADO';
                 }
-                
+
                 $datos_estructurados[] = $estudiante;
             }
-            
+
             return [
                 'datos' => $datos_estructurados,
                 'competencias' => $competencias
             ];
-            
         } catch (Exception $e) {
             throw new Exception("Error al generar informe: " . $e->getMessage());
         }
     }
-    
+
     /**
      * Obtiene todas las competencias únicas (también corregida)
      */
-    private function obtenerCompetenciasUnicas($filtros = []) {
+    private function obtenerCompetenciasUnicas($filtros = [])
+    {
         try {
             $whereClause = "WHERE 1=1";
             $params = [];
-            
+
             if (!empty($filtros['nivel_examen'])) {
                 $whereClause .= " AND ae.nivel_dificultad = :nivel_examen";
                 $params[':nivel_examen'] = $filtros['nivel_examen'];
             }
-            
+
             $sql = "
                 SELECT DISTINCT hc.competencia_nombre
                 FROM historial_competencias hc
@@ -293,21 +297,21 @@ class InformesExamen {
                 $whereClause
                 ORDER BY hc.competencia_nombre
             ";
-            
+
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute($params);
-            
+
             return $stmt->fetchAll(PDO::FETCH_COLUMN);
-            
         } catch (Exception $e) {
             return [];
         }
     }
-    
+
     /**
      * Limpia el nombre de competencia para usar como clave
      */
-    private function limpiarNombreCompetencia($nombre) {
+    private function limpiarNombreCompetencia($nombre)
+    {
         $nombre = strtolower($nombre);
         $nombre = str_replace(['á', 'é', 'í', 'ó', 'ú', 'ñ'], ['a', 'e', 'i', 'o', 'u', 'n'], $nombre);
         $nombre = preg_replace('/[^a-z0-9]/', '_', $nombre);
@@ -318,7 +322,8 @@ class InformesExamen {
     /**
      * Obtiene estadísticas generales para los informes
      */
-    public function obtenerEstadisticasGenerales($filtros = []) {
+    public function obtenerEstadisticasGenerales($filtros = [])
+    {
         try {
             $whereClause = "WHERE 1=1";
             $params = [];
@@ -419,37 +424,34 @@ class InformesExamen {
             return [
                 'total_estudiantes' => $total_estudiantes,
                 'total_examenes' => $total_examenes,
-                'promedio_general' => $promedio_general,
-                'aprobados' => $aprobados,
-                'reprobados' => $reprobados
+                'promedio_general' => $promedio_general
             ];
         } catch (Exception $e) {
             return [
                 'total_estudiantes' => 0,
                 'total_examenes' => 0,
-                'promedio_general' => 0,
-                'aprobados' => 0,
-                'reprobados' => 0
+                'promedio_general' => 0
             ];
         }
     }
 
-    
-    
-    
+
+
+
     /**
      * Genera Excel PROFESIONAL - SIN CORREO Y CON COLORES PARA REPROBADAS
      */
-    public function generarExcelEstructurado($datos, $competencias, $estadisticas, $filtros = []) {
+    public function generarExcelEstructurado($datos, $competencias, $estadisticas, $filtros = [])
+    {
         try {
             // ✅ LIMPIAR CUALQUIER SALIDA PREVIA
             if (ob_get_level()) {
                 ob_end_clean();
             }
-            
+
             $spreadsheet = new Spreadsheet();
             $sheet = $spreadsheet->getActiveSheet();
-            
+
             // ✅ CONFIGURAR PROPIEDADES SIN CARACTERES ESPECIALES
             $spreadsheet->getProperties()
                 ->setCreator("Instituto de Administracion y salud INCATEC")
@@ -469,14 +471,14 @@ class InformesExamen {
             $colorGris = '95A5A6';
 
             $fila_actual = 1;
-            
+
             // ✅ TOTAL DE COLUMNAS CORRECTO
             $total_columnas = 7 + count($competencias) + 3; // DOC+NOMBRE+PROG+SEM+FECHA+NIVEL+INTENTO + COMPETENCIAS + PROMEDIO+RESULTADO+ESTADO
-            
+
             // =============== ENCABEZADO ===============
             $sheet->setCellValue('A1', 'INCATEC');
             $sheet->mergeCells('A1:' . $this->getColumnLetter($total_columnas) . '1');
-            
+
             $sheet->getStyle('A1')->applyFromArray([
                 'font' => [
                     'bold' => true,
@@ -494,7 +496,7 @@ class InformesExamen {
                 ]
             ]);
             $sheet->getRowDimension(1)->setRowHeight(35);
-            
+
             // Subtítulo
             $sheet->setCellValue('A2', 'INFORME DETALLADO DE RESULTADOS POR COMPETENCIAS');
             $sheet->mergeCells('A2:' . $this->getColumnLetter($total_columnas) . '2');
@@ -506,7 +508,7 @@ class InformesExamen {
                 ],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
             ]);
-            
+
             // Fecha
             $sheet->setCellValue('A3', 'Fecha de Generacion: ' . date('d/m/Y H:i:s'));
             $sheet->mergeCells('A3:' . $this->getColumnLetter($total_columnas) . '3');
@@ -514,9 +516,9 @@ class InformesExamen {
                 'font' => ['size' => 11, 'italic' => true],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
             ]);
-            
+
             $fila_actual = 5;
-            
+
             // =============== ESTADÍSTICAS ===============
             if ($estadisticas) {
                 $sheet->setCellValue('A5', 'ESTADISTICAS GENERALES');
@@ -526,16 +528,14 @@ class InformesExamen {
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . $colorAzulClaro]]
                 ]);
-                
+
                 // Estadísticas en fila
                 $stats_data = [
                     'TOTAL ESTUDIANTES' => $estadisticas['total_estudiantes'],
                     'TOTAL EXAMENES' => $estadisticas['total_examenes'],
-                    'PROMEDIO GENERAL' => number_format($estadisticas['promedio_general'], 1) . '%',
-                    'APROBADOS' => $estadisticas['aprobados'],
-                    'REPROBADOS' => $estadisticas['reprobados']
+                    'PROMEDIO GENERAL' => number_format($estadisticas['promedio_general'], 1) . '%'
                 ];
-                
+
                 $col = 1;
                 foreach ($stats_data as $label => $value) {
                     $sheet->setCellValue($this->getColumnLetter($col) . '6', $label);
@@ -550,10 +550,10 @@ class InformesExamen {
                     ]);
                     $col += 2;
                 }
-                
+
                 $fila_actual = 9;
             }
-            
+
             // =============== ENCABEZADOS DE DATOS ===============
             $headers = [
                 'DOCUMENTO',
@@ -564,21 +564,21 @@ class InformesExamen {
                 'NIVEL EXAMEN',
                 'INTENTO'
             ];
-            
+
             foreach ($competencias as $competencia) {
                 $headers[] = strtoupper($competencia) . ' (%)';
             }
-            
+
             $headers[] = 'PROMEDIO FINAL (%)';
             $headers[] = 'RESULTADO';
             $headers[] = 'ESTADO ACADEMICO';
-            
+
             // Escribir encabezados
             foreach ($headers as $col_index => $header) {
                 $col_letter = $this->getColumnLetter($col_index + 1);
                 $sheet->setCellValue($col_letter . $fila_actual, $header);
             }
-            
+
             // Estilo de encabezados
             $header_range = 'A' . $fila_actual . ':' . $this->getColumnLetter(count($headers)) . $fila_actual;
             $sheet->getStyle($header_range)->applyFromArray([
@@ -603,10 +603,10 @@ class InformesExamen {
                     ]
                 ]
             ]);
-            
+
             $sheet->getRowDimension($fila_actual)->setRowHeight(25);
             $fila_actual++;
-            
+
             // =============== DATOS DE ESTUDIANTES ===============
             foreach ($datos as $row_index => $estudiante) {
                 $fila_datos = [
@@ -618,28 +618,28 @@ class InformesExamen {
                     $estudiante['nivel_examen'],
                     $estudiante['intento']
                 ];
-                
+
                 // Agregar competencias
                 foreach ($competencias as $competencia) {
                     $key = 'comp_' . $this->limpiarNombreCompetencia($competencia);
                     $nota = isset($estudiante[$key]) ? $estudiante[$key] : '0.0';
                     $fila_datos[] = $nota;
                 }
-                
+
                 $fila_datos[] = $estudiante['promedio_final'];
                 $fila_datos[] = $estudiante['resultado'];
                 $fila_datos[] = isset($estudiante['estado']) ? $estudiante['estado'] : $estudiante['resultado'];
-                
+
                 // Escribir datos
                 foreach ($fila_datos as $col_index => $valor) {
                     $col_letter = $this->getColumnLetter($col_index + 1);
                     $sheet->setCellValue($col_letter . $fila_actual, $valor);
                 }
-                
+
                 // Estilo de fila
                 $bg_color = ($row_index % 2 == 0) ? 'FFFFFFFF' : 'FFF8F9FA';
                 $row_range = 'A' . $fila_actual . ':' . $this->getColumnLetter(count($fila_datos)) . $fila_actual;
-                
+
                 $sheet->getStyle($row_range)->applyFromArray([
                     'font' => ['size' => 9],
                     'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
@@ -651,7 +651,7 @@ class InformesExamen {
                         ]
                     ]
                 ]);
-                
+
                 // ✅ COLOREAR COMPETENCIAS REPROBADAS
                 for ($i = 7; $i < 7 + count($competencias); $i++) {
                     $col_letter = $this->getColumnLetter($i + 1);
@@ -669,58 +669,67 @@ class InformesExamen {
                         $sheet->getStyle($col_letter . $fila_actual)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     }
                 }
-                
+
                 // Centrar promedio
                 $promedio_col = $this->getColumnLetter(7 + count($competencias) + 1);
                 $sheet->getStyle($promedio_col . $fila_actual)->applyFromArray([
                     'font' => ['bold' => true],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
                 ]);
-                
+
                 // Colorear resultado
                 $resultado_col = $this->getColumnLetter(7 + count($competencias) + 2);
                 $estado_col = $this->getColumnLetter(7 + count($competencias) + 3);
-                
-                $promedio = (float)$estudiante['promedio_final'];
-                $color_resultado = ($promedio >= 70) ? $colorVerde : $colorRojo;
-                
+
+                // Determinar color según el texto, NO solo el promedio
+                $color_resultado = (
+                    strtoupper(trim($estudiante['resultado'])) === 'REPROBADO' ||
+                    strtoupper(trim($estudiante['estado'] ?? '')) === 'REPROBADO'
+                ) ? $colorRojo : $colorVerde;
+
                 $sheet->getStyle($resultado_col . $fila_actual . ':' . $estado_col . $fila_actual)->applyFromArray([
                     'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . $color_resultado]]
                 ]);
-                
+
                 $fila_actual++;
             }
-            
+
             // =============== AJUSTAR ANCHOS ===============
             $anchos = [
-                'A' => 15, 'B' => 35, 'C' => 30, 'D' => 12, 'E' => 15, 'F' => 15, 'G' => 10
+                'A' => 15,
+                'B' => 35,
+                'C' => 30,
+                'D' => 12,
+                'E' => 15,
+                'F' => 15,
+                'G' => 10
             ];
-            
+
             foreach ($anchos as $col => $ancho) {
                 $sheet->getColumnDimension($col)->setWidth($ancho);
             }
-            
+
             // Anchos competencias
             for ($i = 7; $i < 7 + count($competencias); $i++) {
                 $col_letter = $this->getColumnLetter($i + 1);
                 $sheet->getColumnDimension($col_letter)->setWidth(15);
             }
-            
+
             // Anchos finales
             $sheet->getColumnDimension($this->getColumnLetter(7 + count($competencias) + 1))->setWidth(18);
             $sheet->getColumnDimension($this->getColumnLetter(7 + count($competencias) + 2))->setWidth(15);
             $sheet->getColumnDimension($this->getColumnLetter(7 + count($competencias) + 3))->setWidth(18);
-            
+
             // =============== CONFIGURACIONES FINALES ===============
             $sheet->setTitle('Competencias INCATEC');
             $sheet->getPageSetup()->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-            
+
             // ✅ NOMBRE DE ARCHIVO SEGURO (SIN CARACTERES ESPECIALES)
             $fecha_hora = date('Y-m-d_H-i-s');
             $filename = "Informe_Examen_Ingreso_INCATEC_{$fecha_hora}.xlsx";
-            
+
             // ✅ HEADERS HTTP CORRECTOS
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -730,46 +739,46 @@ class InformesExamen {
             header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
             header('Cache-Control: cache, must-revalidate');
             header('Pragma: public');
-            
+
             // ✅ GENERAR Y ENVIAR ARCHIVO
             $writer = new Xlsx($spreadsheet);
             $writer->save('php://output');
             exit();
-            
         } catch (Exception $e) {
             throw new Exception("Error al generar Excel: " . $e->getMessage());
         }
     }
-    
+
     /**
      * Genera informe de estudiantes sin examen realizado
      */
-    public function generarInformeEstudiantesSinExamen($filtros = []) {
+    public function generarInformeEstudiantesSinExamen($filtros = [])
+    {
         try {
             $whereClause = "WHERE 1=1";
             $params = [];
-            
+
             // Aplicar filtros
             if (!empty($filtros['fecha_inicio'])) {
                 $whereClause .= " AND ae.fecha_asignacion >= :fecha_inicio";
                 $params[':fecha_inicio'] = $filtros['fecha_inicio'];
             }
-            
+
             if (!empty($filtros['fecha_fin'])) {
                 $whereClause .= " AND ae.fecha_asignacion <= :fecha_fin";
                 $params[':fecha_fin'] = $filtros['fecha_fin'];
             }
-            
+
             if (!empty($filtros['nivel_examen'])) {
                 $whereClause .= " AND ae.nivel_dificultad = :nivel_examen";
                 $params[':nivel_examen'] = $filtros['nivel_examen'];
             }
-            
+
             if (!empty($filtros['programa'])) {
                 $whereClause .= " AND p.programa = :programa";
                 $params[':programa'] = $filtros['programa'];
             }
-            
+
             $sql = "
                 SELECT 
                     p.id_participante,
@@ -807,11 +816,10 @@ class InformesExamen {
                 )
                 ORDER BY ae.fecha_asignacion DESC, p.nombre ASC
             ";
-            
+
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute($params);
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
         } catch (Exception $e) {
             throw new Exception("Error al generar informe de estudiantes sin examen: " . $e->getMessage());
         }
@@ -820,31 +828,32 @@ class InformesExamen {
     /**
      * Obtiene estadísticas de estudiantes sin examen
      */
-    public function obtenerEstadisticasEstudiantesSinExamen($filtros = []) {
+    public function obtenerEstadisticasEstudiantesSinExamen($filtros = [])
+    {
         try {
             $whereClause = "WHERE 1=1";
             $params = [];
-            
+
             if (!empty($filtros['fecha_inicio'])) {
                 $whereClause .= " AND ae.fecha_asignacion >= :fecha_inicio";
                 $params[':fecha_inicio'] = $filtros['fecha_inicio'];
             }
-            
+
             if (!empty($filtros['fecha_fin'])) {
                 $whereClause .= " AND ae.fecha_asignacion <= :fecha_fin";
                 $params[':fecha_fin'] = $filtros['fecha_fin'];
             }
-            
+
             if (!empty($filtros['nivel_examen'])) {
                 $whereClause .= " AND ae.nivel_dificultad = :nivel_examen";
                 $params[':nivel_examen'] = $filtros['nivel_examen'];
             }
-            
+
             if (!empty($filtros['programa'])) {
                 $whereClause .= " AND p.programa = :programa";
                 $params[':programa'] = $filtros['programa'];
             }
-            
+
             // Total estudiantes con examen asignado
             $sqlTotal = "
                 SELECT COUNT(*) as total
@@ -855,7 +864,7 @@ class InformesExamen {
             $stmt = $this->pdo->prepare($sqlTotal);
             $stmt->execute($params);
             $total_asignados = (int)$stmt->fetchColumn();
-            
+
             // Estudiantes sin examen realizado
             $sqlSinExamen = "
                 SELECT COUNT(*) as total
@@ -869,7 +878,7 @@ class InformesExamen {
             $stmt = $this->pdo->prepare($sqlSinExamen);
             $stmt->execute($params);
             $sin_examen = (int)$stmt->fetchColumn();
-            
+
             // Estudiantes que iniciaron pero no terminaron
             $sqlIniciados = "
                 SELECT COUNT(*) as total
@@ -886,7 +895,7 @@ class InformesExamen {
             $stmt = $this->pdo->prepare($sqlIniciados);
             $stmt->execute($params);
             $iniciados_sin_terminar = (int)$stmt->fetchColumn();
-            
+
             // Promedio de días desde asignación
             $sqlPromedioDias = "
                 SELECT AVG(EXTRACT(DAYS FROM (CURRENT_TIMESTAMP - ae.fecha_asignacion))) as promedio_dias
@@ -901,7 +910,7 @@ class InformesExamen {
             $stmt = $this->pdo->prepare($sqlPromedioDias);
             $stmt->execute($params);
             $promedio_dias = (float)$stmt->fetchColumn();
-            
+
             return [
                 'total_asignados' => $total_asignados,
                 'sin_examen' => $sin_examen,
@@ -910,7 +919,6 @@ class InformesExamen {
                 'promedio_dias_asignacion' => $promedio_dias,
                 'porcentaje_pendientes' => $total_asignados > 0 ? ($sin_examen / $total_asignados) * 100 : 0
             ];
-            
         } catch (Exception $e) {
             return [
                 'total_asignados' => 0,
@@ -926,31 +934,32 @@ class InformesExamen {
     /**
      * Genera Excel para estudiantes sin examen
      */
-    public function generarExcelEstudiantesSinExamen($datos, $estadisticas, $filtros = []) {
+    public function generarExcelEstudiantesSinExamen($datos, $estadisticas, $filtros = [])
+    {
         try {
             if (ob_get_level()) {
                 ob_end_clean();
             }
-            
+
             $spreadsheet = new Spreadsheet();
             $sheet = $spreadsheet->getActiveSheet();
-            
+
             // Configurar propiedades
             $spreadsheet->getProperties()
                 ->setCreator("Instituto de Administracion y salud INCATEC")
                 ->setTitle("Informe de Estudiantes Sin Examen - INCATEC")
                 ->setSubject("Estudiantes Pendientes de Examen")
                 ->setDescription("Informe de estudiantes que tienen asignado el examen pero no lo han realizado");
-        
+
             // Colores
             $colorAzul = '1E3A8A';
             $colorRojo = 'E74C3C';
             $colorNaranja = 'F39C12';
             $colorGris = '95A5A6';
             $colorAzulClaro = 'E6F3FF';
-        
+
             $fila_actual = 1;
-        
+
             // Encabezado principal
             $sheet->setCellValue('A1', 'INCATEC - ESTUDIANTES SIN EXAMEN REALIZADO');
             $sheet->mergeCells('A1:K1');
@@ -959,7 +968,7 @@ class InformesExamen {
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . $colorAzulClaro]]
             ]);
-        
+
             // Fecha
             $sheet->setCellValue('A2', 'Fecha de Generacion: ' . date('d/m/Y H:i:s'));
             $sheet->mergeCells('A2:K2');
@@ -967,9 +976,9 @@ class InformesExamen {
                 'font' => ['italic' => true],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
             ]);
-        
+
             $fila_actual = 4;
-        
+
             // Estadísticas
             if ($estadisticas) {
                 $sheet->setCellValue('A4', 'ESTADISTICAS');
@@ -979,7 +988,7 @@ class InformesExamen {
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . $colorAzulClaro]]
                 ]);
-                
+
                 $stats = [
                     'A5' => ['Total Asignados', $estadisticas['total_asignados']],
                     'C5' => ['Sin Examen', $estadisticas['sin_examen']],
@@ -988,7 +997,7 @@ class InformesExamen {
                     'I5' => ['% Pendientes', number_format($estadisticas['porcentaje_pendientes'], 1) . '%'],
                     'K5' => ['Promedio Días', number_format($estadisticas['promedio_dias_asignacion'], 0)]
                 ];
-                
+
                 foreach ($stats as $celda => $data) {
                     $sheet->setCellValue($celda, $data[0]);
                     $sheet->setCellValue(substr($celda, 0, 1) . '6', $data[1]);
@@ -1001,10 +1010,10 @@ class InformesExamen {
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
                     ]);
                 }
-                
+
                 $fila_actual = 8;
             }
-            
+
             // Encabezados de datos
             $headers = [
                 'DOCUMENTO',
@@ -1019,12 +1028,12 @@ class InformesExamen {
                 'ESTADO',
                 'RESPUESTAS PARCIALES'
             ];
-            
+
             foreach ($headers as $col_index => $header) {
                 $col_letter = $this->getColumnLetter($col_index + 1);
                 $sheet->setCellValue($col_letter . $fila_actual, $header);
             }
-            
+
             // Estilo de encabezados
             $header_range = 'A' . $fila_actual . ':K' . $fila_actual;
             $sheet->getStyle($header_range)->applyFromArray([
@@ -1033,9 +1042,9 @@ class InformesExamen {
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF' . $colorAzul]],
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]]
             ]);
-            
+
             $fila_actual++;
-            
+
             // Datos
             foreach ($datos as $row_index => $estudiante) {
                 $fila_datos = [
@@ -1051,12 +1060,12 @@ class InformesExamen {
                     $estudiante['estado_examen'],
                     $estudiante['respuestas_parciales']
                 ];
-                
+
                 foreach ($fila_datos as $col_index => $valor) {
                     $col_letter = $this->getColumnLetter($col_index + 1);
                     $sheet->setCellValue($col_letter . $fila_actual, $valor);
                 }
-                
+
                 // Colorear según estado
                 $color_fondo = 'FFFFFFFF';
                 if ($estudiante['estado_examen'] === 'NO INICIADO') {
@@ -1066,47 +1075,47 @@ class InformesExamen {
                 } elseif ($estudiante['estado_examen'] === 'SIN ASIGNAR') {
                     $color_fondo = 'FFFF6B6B'; // Rojo claro
                 }
-                
+
                 $row_range = 'A' . $fila_actual . ':K' . $fila_actual;
                 $sheet->getStyle($row_range)->applyFromArray([
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $color_fondo]],
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE0E0E0']]]
                 ]);
-                
+
                 $fila_actual++;
             }
-            
+
             // Ajustar anchos
             $anchos = ['A' => 15, 'B' => 30, 'C' => 25, 'D' => 25, 'E' => 12, 'F' => 15, 'G' => 15, 'H' => 15, 'I' => 20, 'J' => 20, 'K' => 18];
             foreach ($anchos as $col => $ancho) {
                 $sheet->getColumnDimension($col)->setWidth($ancho);
             }
-            
+
             // Configuración final
             $sheet->setTitle('Estudiantes Sin Examen');
             $sheet->getPageSetup()->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-            
+
             // Headers y descarga
             $fecha_hora = date('Y-m-d_H-i-s');
             $filename = "Estudiantes_Sin_Examen_INCATEC_{$fecha_hora}.xlsx";
-            
+
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
             header('Cache-Control: max-age=0');
-            
+
             $writer = new Xlsx($spreadsheet);
             $writer->save('php://output');
             exit();
-            
         } catch (Exception $e) {
             throw new Exception("Error al generar Excel: " . $e->getMessage());
         }
     }
-    
+
     /**
      * ✅ FUNCIÓN AUXILIAR CORREGIDA
      */
-    private function getColumnLetter($columnNumber) {
+    private function getColumnLetter($columnNumber)
+    {
         $columnLetter = '';
         while ($columnNumber > 0) {
             $columnNumber--;
@@ -1129,23 +1138,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'gener
             'programa' => $_POST['programa'] ?? '',
             'estado' => $_POST['estado'] ?? ''
         ]);
-        
+
         $resultado = $informes->generarInformeEstudiantesEstructurado($filtros);
         $datos = $resultado['datos'];
         $competencias = $resultado['competencias'];
         $estadisticas = $informes->obtenerEstadisticasGenerales($filtros);
-        
+
         if (empty($datos)) {
             throw new Exception("No se encontraron datos para los filtros especificados.");
         }
-        
+
         // ✅ LIMPIAR BUFFER ANTES DE GENERAR EXCEL
         while (ob_get_level()) {
             ob_end_clean();
         }
-        
+
         $informes->generarExcelEstructurado($datos, $competencias, $estadisticas, $filtros);
-        
     } catch (Exception $e) {
         $error = "Error al generar Excel: " . $e->getMessage();
         // Log del error
@@ -1159,7 +1167,7 @@ require_once '../includes/header.php';
 // Procesar vista previa
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = $_POST['accion'] ?? '';
-    
+
     switch ($accion) {
         case 'vista_previa':
             try {
@@ -1170,16 +1178,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'programa' => $_POST['programa'] ?? '',
                     'estado' => $_POST['estado'] ?? ''
                 ];
-                
+
                 $filtros = array_filter($filtros);
                 $datos = $informes->generarInformeSimple($filtros);
                 $estadisticas = $informes->obtenerEstadisticasGenerales($filtros);
-                
             } catch (Exception $e) {
                 $error_vista = $e->getMessage();
             }
             break;
-        
+
         case 'generar_excel_sin_examen':
             try {
                 $filtros = array_filter([
@@ -1188,20 +1195,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'nivel_examen' => $_POST['nivel_examen'] ?? '',
                     'programa' => $_POST['programa'] ?? ''
                 ]);
-                
+
                 $datos = $informes->generarInformeEstudiantesSinExamen($filtros);
                 $estadisticas = $informes->obtenerEstadisticasEstudiantesSinExamen($filtros);
-                
+
                 if (empty($datos)) {
                     throw new Exception("No se encontraron estudiantes sin examen para los filtros especificados.");
                 }
-                
+
                 while (ob_get_level()) {
                     ob_end_clean();
                 }
-                
+
                 $informes->generarExcelEstudiantesSinExamen($datos, $estadisticas, $filtros);
-                
             } catch (Exception $e) {
                 $error = "Error al generar Excel: " . $e->getMessage();
                 error_log($error);
@@ -1214,13 +1220,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 try {
     $stmt = $pdo->query("SELECT DISTINCT programa FROM participantes WHERE programa IS NOT NULL ORDER BY programa");
     $programas = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    
+
     $stmt = $pdo->query("SELECT DISTINCT nivel_examen FROM historial_examenes ORDER BY nivel_examen");
     $niveles = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    
+
     $stmt = $pdo->query("SELECT DISTINCT estado FROM historial_examenes ORDER BY estado");
     $estados = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    
 } catch (Exception $e) {
     $error_filtros = $e->getMessage();
 }
@@ -1228,6 +1233,7 @@ try {
 
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1244,9 +1250,9 @@ try {
             --naranja-warning: #ff9800;
             --gris-suave: #f8f9fa;
             --gris-oscuro: #333;
-            --sombra-suave: 0 2px 4px rgba(0,0,0,0.1);
-            --sombra-hover: 0 4px 8px rgba(0,0,0,0.15);
-            --sombra-lg: 0 8px 24px rgba(0,0,0,0.12);
+            --sombra-suave: 0 2px 4px rgba(0, 0, 0, 0.1);
+            --sombra-hover: 0 4px 8px rgba(0, 0, 0, 0.15);
+            --sombra-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
             --border-radius: 8px;
         }
 
@@ -1300,7 +1306,7 @@ try {
             font-size: 2.75rem;
             font-weight: 700;
             margin-bottom: 0.5rem;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .page-subtitle {
@@ -1317,16 +1323,28 @@ try {
             animation: fadeInUp 0.6s ease-out forwards;
         }
 
-        .content-section:nth-child(2) { animation-delay: 0.1s; }
-        .content-section:nth-child(3) { animation-delay: 0.2s; }
-        .content-section:nth-child(4) { animation-delay: 0.3s; }
-        .content-section:nth-child(5) { animation-delay: 0.4s; }
+        .content-section:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .content-section:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        .content-section:nth-child(4) {
+            animation-delay: 0.3s;
+        }
+
+        .content-section:nth-child(5) {
+            animation-delay: 0.4s;
+        }
 
         @keyframes fadeInUp {
             from {
                 opacity: 0;
                 transform: translateY(30px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -1460,7 +1478,7 @@ try {
             left: -100%;
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
             transition: left 0.5s ease;
         }
 
@@ -1694,8 +1712,13 @@ try {
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         /* Responsive */
@@ -1703,23 +1726,23 @@ try {
             .container {
                 padding: 0 1rem;
             }
-            
+
             .filters-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
-            
+
             .actions-container {
                 justify-content: center;
             }
-            
+
             .page-title {
                 font-size: 2rem;
             }
-            
+
             .card-header-professional,
             .card-body-professional {
                 padding: 1rem;
@@ -1730,7 +1753,7 @@ try {
             .stats-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .btn-professional {
                 padding: 0.75rem 1rem;
                 font-size: 0.9rem;
@@ -1776,6 +1799,7 @@ try {
         }
     </style>
 </head>
+
 <body>
     <div class="header-professional">
         <div class="container">
@@ -1826,19 +1850,19 @@ try {
                                     <i class="fas fa-calendar-alt"></i>
                                     Fecha Inicio
                                 </label>
-                                <input type="date" class="form-control-professional" name="fecha_inicio" 
-                                       value="<?php echo $_POST['fecha_inicio'] ?? ''; ?>">
+                                <input type="date" class="form-control-professional" name="fecha_inicio"
+                                    value="<?php echo $_POST['fecha_inicio'] ?? ''; ?>">
                             </div>
-                            
+
                             <div class="form-group-professional">
                                 <label class="form-label-professional">
                                     <i class="fas fa-calendar-alt"></i>
                                     Fecha Fin
                                 </label>
                                 <input type="date" class="form-control-professional" name="fecha_fin"
-                                       value="<?php echo $_POST['fecha_fin'] ?? ''; ?>">
+                                    value="<?php echo $_POST['fecha_fin'] ?? ''; ?>">
                             </div>
-                            
+
                             <div class="form-group-professional">
                                 <label class="form-label-professional">
                                     <i class="fas fa-layer-group"></i>
@@ -1849,14 +1873,14 @@ try {
                                     <?php if (isset($niveles)): ?>
                                         <?php foreach ($niveles as $nivel): ?>
                                             <option value="<?php echo htmlspecialchars($nivel); ?>"
-                                                    <?php echo (($_POST['nivel_examen'] ?? '') === $nivel) ? 'selected' : ''; ?>>
+                                                <?php echo (($_POST['nivel_examen'] ?? '') === $nivel) ? 'selected' : ''; ?>>
                                                 <?php echo ucfirst($nivel); ?>
                                             </option>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
                                 </select>
                             </div>
-                            
+
                             <div class="form-group-professional">
                                 <label class="form-label-professional">
                                     <i class="fas fa-graduation-cap"></i>
@@ -1867,14 +1891,14 @@ try {
                                     <?php if (isset($programas)): ?>
                                         <?php foreach ($programas as $programa): ?>
                                             <option value="<?php echo htmlspecialchars($programa); ?>"
-                                                    <?php echo (($_POST['programa'] ?? '') === $programa) ? 'selected' : ''; ?>>
+                                                <?php echo (($_POST['programa'] ?? '') === $programa) ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars($programa); ?>
                                             </option>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
                                 </select>
                             </div>
-                            
+
                             <div class="form-group-professional">
                                 <label class="form-label-professional">
                                     <i class="fas fa-flag"></i>
@@ -1885,7 +1909,7 @@ try {
                                     <?php if (isset($estados)): ?>
                                         <?php foreach ($estados as $estado): ?>
                                             <option value="<?php echo htmlspecialchars($estado); ?>"
-                                                    <?php echo (($_POST['estado'] ?? '') === $estado) ? 'selected' : ''; ?>>
+                                                <?php echo (($_POST['estado'] ?? '') === $estado) ? 'selected' : ''; ?>>
                                                 <?php echo ucfirst($estado); ?>
                                             </option>
                                         <?php endforeach; ?>
@@ -1893,18 +1917,18 @@ try {
                                 </select>
                             </div>
                         </div>
-                        
+
                         <div class="actions-container">
                             <button type="submit" name="accion" value="vista_previa" class="btn-professional btn-info-professional">
                                 <i class="fas fa-eye"></i>
                                 Vista Previa
                             </button>
-                            
+
                             <button type="submit" name="accion" value="generar_excel" class="btn-professional btn-success-professional">
                                 <i class="fas fa-download"></i>
                                 Descargar Excel
                             </button>
-                            
+
                             <a href="?" class="btn-professional btn-secondary-professional">
                                 <i class="fas fa-refresh"></i>
                                 Limpiar Filtros
@@ -1939,20 +1963,7 @@ try {
                             Promedio
                         </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-number"><?php echo $estadisticas['aprobados']; ?></div>
-                        <div class="stat-label">
-                            <i class="fas fa-check-circle"></i>
-                            Aprobados
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number"><?php echo $estadisticas['reprobados']; ?></div>
-                        <div class="stat-label">
-                            <i class="fas fa-times-circle"></i>
-                            Reprobados
-                        </div>
-                    </div>
+
                 </div>
             </div>
         <?php endif; ?>
@@ -1978,7 +1989,7 @@ try {
                                         <th><i class="fas fa-brain"></i> Competencia</th>
                                         <th><i class="fas fa-check"></i> Correctas</th>
                                         <th><i class="fas fa-question"></i> Total</th>
-                                        <th><i class="fas fa-percent"></i> Porcentaje</th>
+                                        <th><i class="fas fa-p  ercent"></i> Porcentaje</th>
                                         <th><i class="fas fa-flag"></i> Estado</th>
                                     </tr>
                                 </thead>
@@ -2035,7 +2046,7 @@ try {
                         <p style="color: #ef6c00;"><strong>Estados:</strong> Sin iniciar, Iniciado sin terminar, Sin asignar</p>
                         <p class="mb-0" style="color: #ef6c00;">📋 Ideal para seguimiento y recordatorios</p>
                     </div>
-                    
+
                     <form method="POST" id="formInformeSinExamen" class="filter-section">
                         <div class="filters-grid">
                             <div class="form-group-professional">
@@ -2043,19 +2054,19 @@ try {
                                     <i class="fas fa-calendar-alt"></i>
                                     Fecha Asignación Inicio
                                 </label>
-                                <input type="date" class="form-control-professional" name="fecha_inicio" 
-                                       value="<?php echo $_POST['fecha_inicio'] ?? ''; ?>">
+                                <input type="date" class="form-control-professional" name="fecha_inicio"
+                                    value="<?php echo $_POST['fecha_inicio'] ?? ''; ?>">
                             </div>
-                            
+
                             <div class="form-group-professional">
                                 <label class="form-label-professional">
                                     <i class="fas fa-calendar-alt"></i>
                                     Fecha Asignación Fin
                                 </label>
                                 <input type="date" class="form-control-professional" name="fecha_fin"
-                                       value="<?php echo $_POST['fecha_fin'] ?? ''; ?>">
+                                    value="<?php echo $_POST['fecha_fin'] ?? ''; ?>">
                             </div>
-                            
+
                             <div class="form-group-professional">
                                 <label class="form-label-professional">
                                     <i class="fas fa-layer-group"></i>
@@ -2066,14 +2077,14 @@ try {
                                     <?php if (isset($niveles)): ?>
                                         <?php foreach ($niveles as $nivel): ?>
                                             <option value="<?php echo htmlspecialchars($nivel); ?>"
-                                                    <?php echo (($_POST['nivel_examen'] ?? '') === $nivel) ? 'selected' : ''; ?>>
+                                                <?php echo (($_POST['nivel_examen'] ?? '') === $nivel) ? 'selected' : ''; ?>>
                                                 <?php echo ucfirst($nivel); ?>
                                             </option>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
                                 </select>
                             </div>
-                            
+
                             <div class="form-group-professional">
                                 <label class="form-label-professional">
                                     <i class="fas fa-graduation-cap"></i>
@@ -2084,7 +2095,7 @@ try {
                                     <?php if (isset($programas)): ?>
                                         <?php foreach ($programas as $programa): ?>
                                             <option value="<?php echo htmlspecialchars($programa); ?>"
-                                                    <?php echo (($_POST['programa'] ?? '') === $programa) ? 'selected' : ''; ?>>
+                                                <?php echo (($_POST['programa'] ?? '') === $programa) ? 'selected' : ''; ?>>
                                                 <?php echo htmlspecialchars($programa); ?>
                                             </option>
                                         <?php endforeach; ?>
@@ -2092,13 +2103,13 @@ try {
                                 </select>
                             </div>
                         </div>
-                        
+
                         <div class="actions-container">
                             <button type="submit" name="accion" value="vista_previa_sin_examen" class="btn-professional btn-info-professional">
                                 <i class="fas fa-eye"></i>
                                 Vista Previa Sin Examen
                             </button>
-                            
+
                             <button type="submit" name="accion" value="generar_excel_sin_examen" class="btn-professional btn-danger-professional">
                                 <i class="fas fa-download"></i>
                                 Descargar Excel Sin Examen
@@ -2206,9 +2217,9 @@ try {
                                                 <?php endif; ?>
                                             </td>
                                             <td>
-                                                <?php 
+                                                <?php
                                                 $estado_class = '';
-                                                switch($estudiante['estado_examen']) {
+                                                switch ($estudiante['estado_examen']) {
                                                     case 'NO INICIADO':
                                                         $estado_class = 'badge-warning';
                                                         break;
@@ -2252,7 +2263,7 @@ try {
             sections.forEach((section, index) => {
                 section.style.opacity = '0';
                 section.style.transform = 'translateY(30px)';
-                
+
                 setTimeout(() => {
                     section.style.transition = 'all 0.6s ease';
                     section.style.opacity = '1';
@@ -2265,7 +2276,7 @@ try {
         document.getElementById('formInforme').addEventListener('submit', function(e) {
             if (e.submitter && e.submitter.value === 'generar_excel') {
                 e.preventDefault(); // Detener el envío inicial
-                
+
                 Swal.fire({
                     title: '📊 Generar Informe Excel',
                     html: `
@@ -2368,17 +2379,17 @@ try {
                                 popup: 'swal-loading-popup'
                             }
                         });
-                        
+
                         // Enviar el formulario
                         const form = document.getElementById('formInforme');
                         const formData = new FormData(form);
                         formData.set('accion', 'generar_excel');
-                        
+
                         // Crear un formulario temporal y enviarlo
                         const tempForm = document.createElement('form');
                         tempForm.method = 'POST';
                         tempForm.style.display = 'none';
-                        
+
                         for (let [key, value] of formData.entries()) {
                             const input = document.createElement('input');
                             input.type = 'hidden';
@@ -2386,14 +2397,14 @@ try {
                             input.value = value;
                             tempForm.appendChild(input);
                         }
-                        
+
                         document.body.appendChild(tempForm);
                         tempForm.submit();
-                        
+
                         // Cerrar el loading después de un tiempo
                         setTimeout(() => {
                             loadingAlert.close();
-                            
+
                             // Mostrar mensaje de éxito
                             Swal.fire({
                                 title: '✅ ¡Descarga Iniciada!',
@@ -2434,7 +2445,7 @@ try {
         document.getElementById('formInformeSinExamen').addEventListener('submit', function(e) {
             if (e.submitter && e.submitter.value === 'generar_excel_sin_examen') {
                 e.preventDefault();
-                
+
                 Swal.fire({
                     title: '👥 Informe de Estudiantes Sin Examen',
                     html: `
@@ -2485,16 +2496,16 @@ try {
                             showConfirmButton: false,
                             allowOutsideClick: false
                         });
-                        
+
                         // Enviar formulario
                         const form = document.getElementById('formInformeSinExamen');
                         const formData = new FormData(form);
                         formData.set('accion', 'generar_excel_sin_examen');
-                        
+
                         const tempForm = document.createElement('form');
                         tempForm.method = 'POST';
                         tempForm.style.display = 'none';
-                        
+
                         for (let [key, value] of formData.entries()) {
                             const input = document.createElement('input');
                             input.type = 'hidden';
@@ -2502,10 +2513,10 @@ try {
                             input.value = value;
                             tempForm.appendChild(input);
                         }
-                        
+
                         document.body.appendChild(tempForm);
                         tempForm.submit();
-                        
+
                         setTimeout(() => {
                             Swal.close();
                             Swal.fire({
@@ -2520,7 +2531,7 @@ try {
             }
         });
     </script>
-    
+
     <!-- ✅ ESTILOS PERSONALIZADOS PARA SWEETALERT -->
     <style>
         .swal-modern-popup {
@@ -2528,13 +2539,13 @@ try {
             border: 2px solid #2196F3 !important;
             box-shadow: 0 20px 40px rgba(33, 150, 243, 0.2) !important;
         }
-        
+
         .swal-modern-title {
             color: #1976d2 !important;
             font-weight: 600 !important;
             font-size: 1.5rem !important;
         }
-        
+
         .swal-modern-confirm-btn {
             border-radius: 8px !important;
             padding: 12px 24px !important;
@@ -2543,12 +2554,12 @@ try {
             border: none !important;
             transition: all 0.3s ease !important;
         }
-        
+
         .swal-modern-confirm-btn:hover {
             transform: translateY(-2px) !important;
             box-shadow: 0 8px 16px rgba(40, 167, 69, 0.3) !important;
         }
-        
+
         .swal-modern-cancel-btn {
             border-radius: 8px !important;
             padding: 12px 24px !important;
@@ -2557,22 +2568,23 @@ try {
             border: none !important;
             transition: all 0.3s ease !important;
         }
-        
+
         .swal-modern-cancel-btn:hover {
             transform: translateY(-2px) !important;
             box-shadow: 0 8px 16px rgba(108, 117, 125, 0.3) !important;
         }
-        
+
         .swal-loading-popup {
             border-radius: 16px !important;
             border: 2px solid #2196F3 !important;
         }
-        
+
         .swal-success-popup {
             border-radius: 16px !important;
             border: 2px solid #28a745 !important;
         }
     </style>
 </body>
-     <?php require_once '../includes/footer.php'; ?>
+<?php require_once '../includes/footer.php'; ?>
+
 </html>

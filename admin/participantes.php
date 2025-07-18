@@ -38,9 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignar_examen'])) {
 // Crear participante
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['crear_participante'])) {
     $nombre = trim($_POST['nombre']);
-    $correo = isset($_POST['correo']) ? strtolower(trim($_POST['correo'])) : '';
     $identificacion = trim($_POST['identificacion']);
     
+    // Generar correo automáticamente
+    $correo = $identificacion . '@estudiante.incatec.edu.co';
+
     // ✅ VALIDACIÓN: Verificar que todos los campos requeridos estén presentes
     if (empty($nombre)) {
         $alerta = ['tipo' => 'error', 'mensaje' => 'El nombre es requerido'];
@@ -1687,32 +1689,37 @@ Swal.fire({
         `;
         
         // SweetAlert de error mejorado
-        Swal.fire({
-            title: '⚠️ Error de conexión',
-            html: `
-                <div style="text-align: center; padding: 10px;">
-                    <div style="background: linear-gradient(135deg, #f44336, #d32f2f); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
-                        <i class="fas fa-wifi" style="font-size: 24px; margin-bottom: 8px;"></i>
-                        <h4 style="margin: 0; font-size: 16px;">Sin conexión a INCATEC</h4>
-                        <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Revisa tu conexión e intenta nuevamente</p>
-                    </div>
-                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
-                        <code style="font-size: 11px; color: #d32f2f;">${error.message}</code>
-                    </div>
-                    <p style="color: #666; font-size: 13px; margin: 0;">También puedes continuar creando el participante manualmente</p>
-                </div>
-            `,
-            icon: 'error',
-            timer: 8000,
-            showConfirmButton: true,
-            confirmButtonText: 'Entendido',
-            toast: false,
-            position: 'center',
-            background: '#f8f9fa',
-            customClass: {
-                popup: 'swal-toast-custom'
-            }
-        });
+Swal.fire({
+    title: '😕 No pudimos conectar',
+    html: `
+        <div style="text-align: center; padding: 10px;">
+            <div style="background: linear-gradient(135deg, #ffb3b3, #f44336); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                <i class="fas fa-wifi" style="font-size: 28px; margin-bottom: 8px;"></i>
+                <h4 style="margin: 0; font-size: 16px;">¡Ups! No encontramos el estudiante</h4>
+                <p style="margin: 5px 0 0 0; opacity: 0.95; font-size: 14px;">
+                    Puede que el número de identificación no sea válido o el sistema esté temporalmente fuera de línea.
+                </p>
+            </div>
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                <code style="font-size: 11px; color: #d32f2f;">${error.message}</code>
+            </div>
+            <p style="color: #666; font-size: 13px; margin: 0;">
+                Si lo prefieres, puedes continuar creando el participante manualmente.<br>
+                <span style="color: #2196F3;">¡Estamos aquí para ayudarte!</span>
+            </p>
+        </div>
+    `,
+    icon: 'info',
+    timer: 8000,
+    showConfirmButton: true,
+    confirmButtonText: 'Entendido',
+    toast: false,
+    position: 'center',
+    background: '#f8f9fa',
+    customClass: {
+        popup: 'swal-toast-custom'
+    }
+});
         
     } finally {
         // Restaurar botón
@@ -1791,6 +1798,18 @@ document.getElementById('formParticipante').addEventListener('submit', function(
     }
     
     return true;
+});
+
+// ...agrega esto después de cargar el DOM...
+
+document.getElementById('identificacion').addEventListener('input', function(e) {
+    const identificacion = e.target.value.trim();
+    const correoInput = document.getElementById('correo');
+    if (identificacion.length > 0) {
+        correoInput.value = identificacion + '@estudiante.incatec.edu.co';
+    } else {
+        correoInput.value = '';
+    }
 });
 </script>
 
