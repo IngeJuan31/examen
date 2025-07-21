@@ -16,6 +16,52 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Style\Color;
 
+
+
+echo '
+<div id="spinnerCargaCompetencias" role="status" aria-live="polite" aria-label="Cargando participantes"
+     style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:9999;
+            background:rgba(255,255,255,0.9); display:flex; align-items:center; justify-content:center;">
+    <div style="text-align:center;">
+        <div class="spinner-circulo"></div>
+        <div style="margin-top:1.2rem; color:#1565C0; font-weight:600; font-size:1.125rem;
+                    font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;">
+            <i class="fas fa-book" aria-hidden="true"></i> Generando Informes...
+        </div>
+    </div>
+</div>
+';
+
+// Estilos del spinner
+echo '
+<style>
+.spinner-circulo {
+    border: 6px solid #e3f2fd;
+    border-top: 6px solid #2196F3;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s ease-in-out infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg);}
+    100% { transform: rotate(360deg);}
+}
+</style>
+';
+
+// Script para ocultar el spinner al cargar la página completamente
+echo '
+<script>
+window.addEventListener("load", function() {
+    var spinner = document.getElementById("spinnerCargaCompetencias");
+    if (spinner) {
+        spinner.style.display = "none";
+    }
+});
+</script>';
 class InformesExamen
 {
     private $pdo;

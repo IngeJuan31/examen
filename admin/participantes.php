@@ -8,6 +8,52 @@ verificarPermiso('PARTICIPANTES'); // Cambia el permiso según la vista
 $alerta = null;
 $participante_editar = null;
 
+echo '
+<div id="spinnerCargaParticipantes" role="status" aria-live="polite" aria-label="Cargando participantes"
+     style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:9999;
+            background:rgba(255,255,255,0.9); display:flex; align-items:center; justify-content:center;">
+    <div style="text-align:center;">
+        <div class="spinner-circulo"></div>
+        <div style="margin-top:1.2rem; color:#1565C0; font-weight:600; font-size:1.125rem;
+                    font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;">
+            <i class="fas fa-users" aria-hidden="true"></i> Cargando participantes...
+        </div>
+    </div>
+</div>
+';
+
+// Estilos del spinner
+echo '
+<style>
+.spinner-circulo {
+    border: 6px solid #e3f2fd;
+    border-top: 6px solid #2196F3;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s ease-in-out infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg);}
+    100% { transform: rotate(360deg);}
+}
+</style>
+';
+
+// Script para ocultar el spinner al cargar la página completamente
+echo '
+<script>
+window.addEventListener("load", function() {
+    var spinner = document.getElementById("spinnerCargaParticipantes");
+    if (spinner) {
+        spinner.style.display = "none";
+    }
+});
+</script>
+';
+
 // Asignar examen por dificultad
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['asignar_examen'])) {
     $id_participante = $_POST['id_participante'];
@@ -1303,161 +1349,161 @@ async function buscarEnIncatec() {
     btnBuscar.disabled = true;
     
     // ✅ MOSTRAR SWEETALERT DE CARGA ELEGANTE CON SPINNER
-Swal.fire({
-    title: '🔍 Consultando INCATEC',
-    html: `
-        <div style="text-align: center; padding: 20px;">
-            <!-- Spinner Elegante -->
-            <div class="elegant-spinner-container">
-                <div class="elegant-spinner">
-                    <div class="spinner-ring"></div>
-                    <div class="spinner-ring"></div>
-                    <div class="spinner-ring"></div>
-                    <div class="spinner-center">
-                        <i class="fas fa-graduation-cap spinner-icon"></i>
+    Swal.fire({
+        title: '🔍 Consultando INCATEC',
+        html: `
+            <div style="text-align: center; padding: 20px;">
+                <!-- Spinner Elegante -->
+                <div class="elegant-spinner-container">
+                    <div class="elegant-spinner">
+                        <div class="spinner-ring"></div>
+                        <div class="spinner-ring"></div>
+                        <div class="spinner-ring"></div>
+                        <div class="spinner-center">
+                            <i class="fas fa-graduation-cap spinner-icon"></i>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <div style="margin-top: 30px;">
-                <h4 style="color: #2196F3; margin: 0 0 8px 0; font-size: 16px;">Buscando estudiante</h4>
-                <p style="color: #666; margin: 0; font-size: 14px;">Documento: <strong>${documento}</strong></p>
-            </div>
-            
-            <div class="loading-progress" style="margin-top: 20px;">
-                <div class="progress-bar">
-                    <div class="progress-fill"></div>
+                
+                <div style="margin-top: 30px;">
+                    <h4 style="color: #2196F3; margin: 0 0 8px 0; font-size: 16px;">Buscando estudiante</h4>
+                    <p style="color: #666; margin: 0; font-size: 14px;">Documento: <strong>${documento}</strong></p>
                 </div>
-                <p style="color: #999; font-size: 12px; margin: 8px 0 0 0;">Conectando con el sistema académico...</p>
+                
+                <div class="loading-progress" style="margin-top: 20px;">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <p style="color: #999; font-size: 12px; margin: 8px 0 0 0;">Conectando con el sistema académico...</p>
+                </div>
             </div>
-        </div>
-        
-        <style>
-            .elegant-spinner-container {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                margin: 20px 0;
-            }
             
-            .elegant-spinner {
-                position: relative;
-                width: 80px;
-                height: 80px;
-                display: flex;
-                justify-content: center;
-                align-items: center;
+            <style>
+                .elegant-spinner-container {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    margin: 20px 0;
+                }
+                
+                .elegant-spinner {
+                    position: relative;
+                    width: 80px;
+                    height: 80px;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+                
+                .spinner-ring {
+                    position: absolute;
+                    border: 2px solid transparent;
+                    border-radius: 50%;
+                    animation: spin 2s linear infinite;
+                }
+                
+                .spinner-ring:nth-child(1) {
+                    width: 80px;
+                    height: 80px;
+                    border-top-color: #2196F3;
+                    border-right-color: #2196F3;
+                    animation-duration: 1.5s;
+                }
+                
+                .spinner-ring:nth-child(2) {
+                    width: 60px;
+                    height: 60px;
+                    border-top-color: #4CAF50;
+                    border-left-color: #4CAF50;
+                    animation-duration: 2s;
+                    animation-direction: reverse;
+                }
+                
+                .spinner-ring:nth-child(3) {
+                    width: 40px;
+                    height: 40px;
+                    border-top-color: #FF9800;
+                    border-bottom-color: #FF9800;
+                    animation-duration: 1.2s;
+                }
+                
+                .spinner-center {
+                    position: absolute;
+                    z-index: 10;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    width: 30px;
+                    height: 30px;
+                    background: linear-gradient(45deg, #2196F3, #4CAF50);
+                    border-radius: 50%;
+                    box-shadow: 0 0 15px rgba(33, 150, 243, 0.3);
+                }
+                
+                .spinner-icon {
+                    color: white;
+                    font-size: 14px;
+                    animation: pulse 1.5s ease-in-out infinite;
+                }
+                
+                .progress-bar {
+                    width: 100%;
+                    height: 4px;
+                    background: #e0e0e0;
+                    border-radius: 2px;
+                    overflow: hidden;
+                    position: relative;
+                }
+                
+                .progress-fill {
+                    height: 100%;
+                    background: linear-gradient(90deg, #2196F3, #4CAF50, #2196F3);
+                    background-size: 200% 100%;
+                    border-radius: 2px;
+                    animation: progressWave 2s ease-in-out infinite;
+                }
+                
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                
+                @keyframes pulse {
+                    0%, 100% { transform: scale(1); opacity: 1; }
+                    50% { transform: scale(1.1); opacity: 0.8; }
+                }
+                
+                @keyframes progressWave {
+                    0% { background-position: 200% 0; }
+                    100% { background-position: -200% 0; }
+                }
+                
+                .swal-loading-custom {
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+                }
+            </style>
+        `,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        customClass: {
+            popup: 'swal-loading-custom'
+        },
+        didOpen: () => {
+            // Opcional: agregar efectos adicionales cuando se abra
+            const spinnerContainer = document.querySelector('.elegant-spinner-container');
+            if (spinnerContainer) {
+                spinnerContainer.style.opacity = '0';
+                spinnerContainer.style.transform = 'scale(0.8)';
+                setTimeout(() => {
+                    spinnerContainer.style.transition = 'all 0.3s ease-out';
+                    spinnerContainer.style.opacity = '1';
+                    spinnerContainer.style.transform = 'scale(1)';
+                }, 100);
             }
-            
-            .spinner-ring {
-                position: absolute;
-                border: 2px solid transparent;
-                border-radius: 50%;
-                animation: spin 2s linear infinite;
-            }
-            
-            .spinner-ring:nth-child(1) {
-                width: 80px;
-                height: 80px;
-                border-top-color: #2196F3;
-                border-right-color: #2196F3;
-                animation-duration: 1.5s;
-            }
-            
-            .spinner-ring:nth-child(2) {
-                width: 60px;
-                height: 60px;
-                border-top-color: #4CAF50;
-                border-left-color: #4CAF50;
-                animation-duration: 2s;
-                animation-direction: reverse;
-            }
-            
-            .spinner-ring:nth-child(3) {
-                width: 40px;
-                height: 40px;
-                border-top-color: #FF9800;
-                border-bottom-color: #FF9800;
-                animation-duration: 1.2s;
-            }
-            
-            .spinner-center {
-                position: absolute;
-                z-index: 10;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                width: 30px;
-                height: 30px;
-                background: linear-gradient(45deg, #2196F3, #4CAF50);
-                border-radius: 50%;
-                box-shadow: 0 0 15px rgba(33, 150, 243, 0.3);
-            }
-            
-            .spinner-icon {
-                color: white;
-                font-size: 14px;
-                animation: pulse 1.5s ease-in-out infinite;
-            }
-            
-            .progress-bar {
-                width: 100%;
-                height: 4px;
-                background: #e0e0e0;
-                border-radius: 2px;
-                overflow: hidden;
-                position: relative;
-            }
-            
-            .progress-fill {
-                height: 100%;
-                background: linear-gradient(90deg, #2196F3, #4CAF50, #2196F3);
-                background-size: 200% 100%;
-                border-radius: 2px;
-                animation: progressWave 2s ease-in-out infinite;
-            }
-            
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            
-            @keyframes pulse {
-                0%, 100% { transform: scale(1); opacity: 1; }
-                50% { transform: scale(1.1); opacity: 0.8; }
-            }
-            
-            @keyframes progressWave {
-                0% { background-position: 200% 0; }
-                100% { background-position: -200% 0; }
-            }
-            
-            .swal-loading-custom {
-                border-radius: 15px;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            }
-        </style>
-    `,
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    showConfirmButton: false,
-    customClass: {
-        popup: 'swal-loading-custom'
-    },
-    didOpen: () => {
-        // Opcional: agregar efectos adicionales cuando se abra
-        const spinnerContainer = document.querySelector('.elegant-spinner-container');
-        if (spinnerContainer) {
-            spinnerContainer.style.opacity = '0';
-            spinnerContainer.style.transform = 'scale(0.8)';
-            setTimeout(() => {
-                spinnerContainer.style.transition = 'all 0.3s ease-out';
-                spinnerContainer.style.opacity = '1';
-                spinnerContainer.style.transform = 'scale(1)';
-            }, 100);
         }
-    }
-});
+    });
     
     // Limpiar resultado anterior
     resultadoDiv.innerHTML = '';
@@ -1689,37 +1735,37 @@ Swal.fire({
         `;
         
         // SweetAlert de error mejorado
-Swal.fire({
-    title: '😕 No pudimos conectar',
-    html: `
-        <div style="text-align: center; padding: 10px;">
-            <div style="background: linear-gradient(135deg, #ffb3b3, #f44336); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
-                <i class="fas fa-wifi" style="font-size: 28px; margin-bottom: 8px;"></i>
-                <h4 style="margin: 0; font-size: 16px;">¡Ups! No encontramos el estudiante</h4>
-                <p style="margin: 5px 0 0 0; opacity: 0.95; font-size: 14px;">
-                    Puede que el número de identificación no sea válido o el sistema esté temporalmente fuera de línea.
-                </p>
-            </div>
-            <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
-                <code style="font-size: 11px; color: #d32f2f;">${error.message}</code>
-            </div>
-            <p style="color: #666; font-size: 13px; margin: 0;">
-                Si lo prefieres, puedes continuar creando el participante manualmente.<br>
-                <span style="color: #2196F3;">¡Estamos aquí para ayudarte!</span>
-            </p>
-        </div>
-    `,
-    icon: 'info',
-    timer: 8000,
-    showConfirmButton: true,
-    confirmButtonText: 'Entendido',
-    toast: false,
-    position: 'center',
-    background: '#f8f9fa',
-    customClass: {
-        popup: 'swal-toast-custom'
-    }
-});
+        Swal.fire({
+            title: '😕 No pudimos conectar',
+            html: `
+                <div style="text-align: center; padding: 10px;">
+                    <div style="background: linear-gradient(135deg, #ffb3b3, #f44336); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                        <i class="fas fa-wifi" style="font-size: 28px; margin-bottom: 8px;"></i>
+                        <h4 style="margin: 0; font-size: 16px;">¡Ups! No encontramos el estudiante</h4>
+                        <p style="margin: 5px 0 0 0; opacity: 0.95; font-size: 14px;">
+                            Puede que el número de identificación no sea válido o el sistema esté temporalmente fuera de línea.
+                        </p>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                        <code style="font-size: 11px; color: #d32f2f;">${error.message}</code>
+                    </div>
+                    <p style="color: #666; font-size: 13px; margin: 0;">
+                        Si lo prefieres, puedes continuar creando el participante manualmente.<br>
+                        <span style="color: #2196F3;">¡Estamos aquí para ayudarte!</span>
+                    </p>
+                </div>
+            `,
+            icon: 'info',
+            timer: 8000,
+            showConfirmButton: true,
+            confirmButtonText: 'Entendido',
+            toast: false,
+            position: 'center',
+            background: '#f8f9fa',
+            customClass: {
+                popup: 'swal-toast-custom'
+            }
+        });
         
     } finally {
         // Restaurar botón
